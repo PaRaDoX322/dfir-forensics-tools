@@ -1,0 +1,6 @@
+# dfir-forensics-tools — Python requirements
+# All tools run on Python 3.8+ with stdlib only.
+# No third-party packages required for core functionality.
+#
+# Optional: for enhanced output in interactive terminal
+colorama>=0.4.6; sys_platform == "win32"
