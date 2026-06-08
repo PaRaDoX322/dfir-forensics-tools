@@ -182,4 +182,4 @@ MIT License — see LICENSE file.
 ## Author
 
 Dmitrii Kharkovets — DFIR / Hardware Forensics  
-[LinkedIn](https://linkedin.com/in/dmitrii-kharkovets)
+[LinkedIn](https://linkedin.com/in/dmitrii-k-h/)
