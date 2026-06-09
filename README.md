@@ -91,7 +91,7 @@ Digital Forensics & Incident Response Specialist
 Hardware Forensics | Enterprise Data Recovery | Cyber Resilience Research
 
 - Email: dimas8598@gmail.com  
-- LinkedIn: [linkedin.com/in/dmitrii-kharkovets](https://linkedin.com/in/dmitrii-kharkovets)  
+- LinkedIn: [linkedin.com/in/dmitrii-k-h](https://linkedin.com/in/dmitrii-k-h) 
 - Research: [Forensic Focus](https://forensicfocus.com) | [ResearchGate](https://researchgate.net)
 
 ### Background
