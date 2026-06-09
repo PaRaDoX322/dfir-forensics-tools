@@ -1,185 +1,146 @@
-# dfir-forensics-tools
+# DFIR Forensics Tools
 
-A collection of Python CLI tools for digital forensics and incident response, focused on NAND flash analysis and ransomware recovery. Built from fieldwork on real cases — these scripts implement techniques I use in practice, not just theoretical approaches.
+**Digital Forensics & Incident Response — Open-Source Methodology Toolkit**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
+[![Field: DFIR](https://img.shields.io/badge/Field-DFIR%20%7C%20Hardware%20Forensics-darkblue)]()
+
+---
+
+## Overview
+
+This repository contains field-validated tools for digital forensics practitioners working at the intersection of hardware storage forensics and enterprise incident response. The tooling addresses scenarios where conventional forensic acquisition tools are insufficient — controller-locked NAND devices, partially encrypted ransomware volumes, and degraded storage media requiring physical-layer analysis before logical recovery.
+
+All tools are derived from production casework and research documented in the accompanying white papers.
 
 ---
 
 ## Tools
 
-### `nand_oob_analyzer.py` — NAND Flash OOB / L2P Analyzer
+### [`nand_oob_analyzer.py`](nand_oob_analyzer.py)
+**NAND Flash Out-of-Band Metadata Analyzer**
 
-Parses Out-of-Band (OOB / spare area) data from raw NAND dumps to reconstruct the Logical-to-Physical (L2P) page mapping without relying on the storage controller. Useful when the original flash controller is unavailable, damaged, or locked.
+Analyzes raw NAND flash dumps to extract and decode Out-of-Band (OOB) spare area metadata without access to the original storage controller. Reconstructs the logical-to-physical page mapping (FTL) from OOB byte patterns, supporting multiple common OOB layouts.
 
-**When to use it:**
-- Chip-off recovery from eMMC, NAND, or SD-card media
-- Controller firmware fault or wear-threshold lock
-- Post-mortem analysis of failed SSDs
-- Validation of existing L2P maps against raw OOB data
-
-**Highlights:**
-- Auto-detects page geometry (2KB/4KB/8KB) and OOB layout (Samsung, Hynix, Toshiba, SanDisk, generic)
-- Resolves mapping conflicts using erase count fields
-- Exports full page records and clean L2P map to CSV
-- Shannon entropy per page for identifying encrypted or compressed blocks
+**Use case:** Chip-off recovery from controller-locked NAND devices (SSDs, mobile phones, SD cards, embedded storage) where the controller firmware has failed or entered a locked state.
 
 ```bash
-# Analyze a 64GB eMMC chip-off dump
-python nand_oob_analyzer.py dump.bin --page-size 4096 --oob-size 128
-
-# Auto-detect geometry, export L2P map
-python nand_oob_analyzer.py dump.bin --auto --out pages.csv --l2p-out l2p_map.csv
-
-# Verbose mode shows every OOB field
-python nand_oob_analyzer.py dump.bin --verbose
+python nand_oob_analyzer.py --dump device.bin --page-size 2048 --oob-size 64 --output mapping.json
 ```
 
 ---
 
-### `disk_entropy_scanner.py` — Disk Entropy Scanner
+### [`disk_entropy_scanner.py`](disk_entropy_scanner.py)
+**Shannon Entropy-Based Encryption Coverage Scanner**
 
-Scans disk images sector-by-sector using Shannon entropy analysis to locate encrypted regions, detect partial encryption boundaries, and identify plaintext islands within otherwise-encrypted volumes. A core tool for quantifying recovery scope after ransomware incidents.
+Performs block-by-block Shannon entropy analysis of disk images to map encryption coverage. Distinguishes encrypted regions (entropy ~8.0 bits/byte), plaintext regions (variable, <7.5), and zero-filled blocks (entropy 0). Generates an entropy map and coverage report.
 
-**When to use it:**
-- Determine what percentage of a volume is recoverable
-- Find the exact offset where ransomware stopped encrypting
-- Locate unencrypted data blocks within an encrypted region
-- Detect file system signatures that survived partial encryption
-
-**Highlights:**
-- Configurable block size (512B to 64KB)
-- Classifies blocks: `zero_fill / plaintext / compressed_or_mixed / encrypted`
-- Detects encryption start/end boundaries automatically
-- ASCII entropy map for quick visual assessment
-- File system signature detection at block boundaries
-- CSV export of full per-block records
+**Use case:** First-hour ransomware triage to determine what percentage of a volume is actually encrypted — critical for deciding whether forensic recovery is viable before committing to a response strategy.
 
 ```bash
-# Quick scan with defaults (4KB blocks, threshold 7.5 bits/byte)
-python disk_entropy_scanner.py image.dd
-
-# Fine-grained scan with map output
-python disk_entropy_scanner.py image.dd --block-size 512 --map
-
-# Export block records for further analysis
-python disk_entropy_scanner.py image.dd --out entropy.csv --map-file entropy_map.txt
-
-# Scan a specific range (e.g., first 10GB only)
-python disk_entropy_scanner.py image.dd --end 10737418240
+python disk_entropy_scanner.py --image volume.dd --block-size 512 --output entropy_report.json
 ```
 
 ---
 
-### `ransomware_triage.py` — Ransomware Rapid Triage Tool
+### [`recovery_viability_scorer.py`](recovery_viability_scorer.py)
+**Ransomware Recovery Viability Scorer (RVS)**
 
-First-response tool for ransomware incidents. Scans an affected directory tree, identifies the ransomware family from extension patterns and ransom notes, checks for VSS deletion artifacts, and produces a structured triage report with prioritized recovery recommendations.
+Implements a 9-factor quantitative scoring model for assessing ransomware recovery viability. Factors include: VSS integrity, backup architecture, encryption coverage, known decryptor availability, memory acquisition status, ransomware family identification, file extension targeting scope, partial encryption detection, and network reach of the incident.
 
-**When to use it:**
-- First 30 minutes of a ransomware incident response
-- Rapid family identification before pulling in senior resources
-- Quantifying scope: how many files, which extensions, how widespread
-- Generating a triage artifact for the incident report
-
-**Highlights:**
-- 25+ ransomware family signatures (LockBit, BlackCat/ALPHV, REvil, Hive, WannaCry, etc.)
-- Ransom note detection across 15+ naming patterns
-- VSS deletion artifact search in Windows Event Log files
-- MD5 fingerprints of sample encrypted files for deduplication
-- JSON export for integration into IR workflows
+**Use case:** Structured first-assessment framework for IR practitioners advising organizations on whether to pursue forensic recovery, pay the ransom, or restore from backup — before making an irreversible decision.
 
 ```bash
-# Triage an affected directory
-python ransomware_triage.py --dir /mnt/affected_volume
-
-# Include Windows Event Log analysis
-python ransomware_triage.py --dir /mnt/vol --event-log System.evtx
-
-# Export full triage report to JSON
-python ransomware_triage.py --dir /mnt/vol --out triage_report.json
+python recovery_viability_scorer.py --interactive
+# or
+python recovery_viability_scorer.py --config case_params.json
 ```
 
 ---
 
-### `recovery_viability_scorer.py` — Recovery Viability Scorer
+### [`ransomware_triage.py`](ransomware_triage.py)
+**Ransomware Incident Triage Workflow**
 
-Interactive CLI implementation of the 9-Factor Recovery Viability Score Model. Walks through the key decision factors for a ransomware incident, weights each answer, and produces a 0–100 score with a prioritized recovery roadmap. Designed to structure the initial decision-making session between IR lead and client.
+Automated first-hour triage script for Windows and Linux ransomware incidents. Performs: network interface status check, VSS snapshot enumeration, running process and network connection capture, entropy sampling of affected volumes, and known ransomware family identification via ransom note signature matching.
 
-**The 9 factors:**
-| Factor | Weight | What it measures |
-|--------|--------|-----------------|
-| F1 — Family & Decryptor | 20% | Known decryptors, documented weaknesses |
-| F2 — Backup Completeness | 22% | Offline/cloud/network backup status |
-| F3 — VSS Status | 12% | Shadow copy availability |
-| F4 — Encryption Scope | 14% | % of volume affected |
-| F5 — Time Elapsed | 10% | Memory artifact window |
-| F6 — Memory State | 8% | Live system / volatile evidence |
-| F7 — Storage Condition | 6% | Physical device health |
-| F8 — Encryption Quality | 5% | Implementation flaws |
-| F9 — IR Capability | 3% | Available resources |
+**Use case:** Standardized triage automation for IR teams to preserve evidence and gather initial assessment data in the first 30 minutes of a ransomware response.
 
 ```bash
-# Interactive assessment
-python recovery_viability_scorer.py
-
-# Save results to JSON
-python recovery_viability_scorer.py --save assessment.json
-
-# Batch mode — load answers from JSON
-python recovery_viability_scorer.py --batch assessment.json
-
-# Machine-readable JSON output
-python recovery_viability_scorer.py --json
-```
-
-**Score interpretation:**
-- `70–100` → Recovery without payment likely achievable
-- `45–69`  → Partial recovery achievable; residual data loss expected  
-- `25–44`  → Limited recovery path; specialist intervention required
-- `0–24`   → Critical low; evaluate all options carefully
-
----
-
-## Background
-
-These tools were developed over several years working DFIR cases that involved hardware-level storage forensics and ransomware incident response. Standard tools handle the common cases well — these fill specific gaps I kept running into:
-
-- **L2P reconstruction:** Most recovery tools assume a working controller. Chip-off cases where the controller is dead or locked require parsing OOB directly.
-- **Encryption scope:** Clients need to know *how much* of their data is actually gone vs. recoverable before making decisions. Entropy scanning gives that answer in minutes.
-- **Triage structure:** The first 30–60 minutes of a ransomware IR are chaotic. Having a structured triage that produces a documentable artifact helps immediately.
-- **Viability scoring:** The decision of whether to attempt recovery vs. pay is genuinely hard and context-dependent. A structured scoring session with the client forces the right questions.
-
-The methodology behind these tools is described in more detail in the companion white papers:
-- *"NAND Flash Memory Forensics: Bypassing Controller Dependencies in Embedded Storage Recovery"*
-- *"Enterprise Ransomware Recovery: A Structured Forensic Methodology for System Restoration Without Ransom Payment"*
-
----
-
-## Requirements
-
-Python 3.8+ with standard library only. No external dependencies required.
-
-```bash
-# Optional (Windows terminal color support only)
-pip install -r requirements.txt
+python ransomware_triage.py --target \\AFFECTED-HOST --output triage_report/
 ```
 
 ---
 
-## Usage notes
+## Research
 
-- All tools operate on **copies** of evidence — never run on original media.
-- NAND dumps should be acquired with `nanddump` (Linux MTD layer) or specialist chip-off hardware.
-- Disk images should be acquired with `dcfldd`, `Guymager`, or `FTK Imager` before analysis.
-- For live system memory acquisition, use Magnet RAM Capture or WinPMem before running any of these tools.
+This toolset is accompanied by three technical white papers documenting the underlying methodology:
 
----
-
-## License
-
-MIT License — see LICENSE file.
+| White Paper | Topic | Status |
+|-------------|-------|--------|
+| [HDD Corrosive-Environment Recovery Methodology](docs/WhitePaper_HDD_Seawater_Recovery.pdf) | PCB reconstruction, ROM extraction, firmware adaptive transfer for seawater-damaged HDDs | Published |
+| [NAND Flash Forensics: Controller-Locked Device Recovery](docs/WhitePaper_NAND_Forensics.pdf) | Chip-off acquisition, OOB analysis, FTL reconstruction methodology | Published |
+| [Enterprise Ransomware Recovery Methodology](docs/WhitePaper_RansomwareRecovery.pdf) | RVS framework, entropy triage, VSS recovery, structured IR workflow | Published |
 
 ---
 
 ## Author
 
-Dmitrii Kharkovets — DFIR / Hardware Forensics  
-[LinkedIn](https://linkedin.com/in/dmitrii-k-h/)
+**Dmitrii Kharkovets**  
+Digital Forensics & Incident Response Specialist  
+Hardware Forensics | Enterprise Data Recovery | Cyber Resilience Research
+
+- Email: dimas8598@gmail.com  
+- LinkedIn: [linkedin.com/in/dmitrii-kharkovets](https://linkedin.com/in/dmitrii-kharkovets)  
+- Research: [Forensic Focus](https://forensicfocus.com) | [ResearchGate](https://researchgate.net)
+
+### Background
+
+Five years of independent DFIR practice focused on storage-layer forensics and enterprise incident response. Specializations:
+
+- **NAND flash forensics:** Test-point bypass, chip-off desoldering, OOB metadata reverse engineering, FTL reconstruction for controller-locked devices with no published documentation
+- **Hardware-level HDD recovery:** PCB electronics repair, ROM extraction, firmware adaptation, corrosive-environment damage protocols
+- **Ransomware recovery:** Entropy-based triage, VSS integrity verification, memory forensics, structured recovery viability assessment
+- **Open-source methodology:** Practitioner-accessible tooling and published frameworks for the DFIR community
+
+---
+
+## Documentation
+
+```
+dfir-forensics-tools/
+├── nand_oob_analyzer.py          # NAND OOB metadata analysis
+├── disk_entropy_scanner.py       # Entropy-based encryption coverage detection
+├── recovery_viability_scorer.py  # 9-factor ransomware recovery viability model
+├── ransomware_triage.py          # First-hour IR triage automation
+├── docs/
+│   ├── WhitePaper_HDD_Seawater_Recovery.pdf
+│   ├── WhitePaper_NAND_Forensics.pdf
+│   └── WhitePaper_RansomwareRecovery.pdf
+├── LICENSE
+└── README.md
+```
+
+---
+
+## Usage Notes
+
+These tools are designed for use by qualified forensic practitioners. They are provided as methodology implementations — not as plug-and-play solutions. Hardware forensics in particular (chip-off, test-point access, PCB rework) requires physical competencies and appropriate equipment that are outside the scope of software tooling.
+
+**Before using `nand_oob_analyzer.py`:** Read the accompanying NAND Forensics white paper for OOB layout background. The tool requires an understanding of NAND architecture to interpret its output correctly.
+
+**Before using `disk_entropy_scanner.py`:** Image the affected volume forensically (write-blocker or `dd`-equivalent) before running the scan. Never scan a live, potentially still-running ransomware process.
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE). 
+
+Tools may be freely used, modified, and distributed with attribution.
+
+---
+
+## Contributing
+
+Issues and pull requests welcome. If you've encountered a NAND controller OOB layout not covered by `nand_oob_analyzer.py`, opening an issue with the chip markings and a hex sample of the spare area is the most useful contribution.
